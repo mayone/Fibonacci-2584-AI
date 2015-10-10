@@ -1,144 +1,21 @@
 #include "Fib2584Ai.h"
 
 Fib2584Ai::Fib2584Ai()
-{
-}
+{}
 
 void Fib2584Ai::initialize(int argc, char* argv[])
 {
-	generateFibMap(fib_map);
-
 	//srand(time(NULL));
+	heuristic.initialize();
+
 	return;
 }
 
 MoveDirection Fib2584Ai::generateMove(int board[4][4])
 {
-	int max_num = 0;
-	int max_loc[2];
-
-	int num_mergables[2];
-	int max_tile[4];
-	int max_num_mergables = 0;
-
-	int local_density[4];
-
-	int move_score[4];
-	int max_move_score;
-	int optimal_move = -1;
-	MoveDirection move;
-
-	bool boardChanged = boardcmp(board_prev, board);
-
-	//displayBoard(board);
-
-	max_tile[MOVE_UP] = 0;
-	max_tile[MOVE_RIGHT] = 0;
-	max_tile[MOVE_DOWN] = 0;
-	max_tile[MOVE_LEFT] = 0;
-	num_mergables[VERTICAL] = numberOfVerticalMergables(board, max_tile[MOVE_UP], max_tile[MOVE_DOWN]);
-	num_mergables[HORIZONTAL] = numberOfHorizontalMergables(board, max_tile[MOVE_LEFT], max_tile[MOVE_RIGHT]);
-
-	//printf("num_mergables_vertical = %d\n", num_mergables[VERTICAL]);
-	//printf("num_mergables_horizontal = %d\n", num_mergables[HORIZONTAL]);
-
-	// Find max number and it's location
-	for(int i = 0; i < 4; i++) {
-		for(int j = 0; j < 4; j++) {
-			if (board[i][j] > max_num) {
-				max_num = board[i][j];
-				max_loc[0] = i;
-				max_loc[1] = j;
-			}
-		}
-	}
-
-	//getLocalDensity(board, local_density);
-
-	// Evaluate score for each direction
-	move_score[MOVE_UP] = num_mergables[VERTICAL] + fib_map[max_tile[MOVE_UP]]/2;
-	move_score[MOVE_RIGHT] = num_mergables[HORIZONTAL] + fib_map[max_tile[MOVE_RIGHT]]/2;
-	move_score[MOVE_DOWN] = num_mergables[VERTICAL] + fib_map[max_tile[MOVE_DOWN]]/2;
-	move_score[MOVE_LEFT] = num_mergables[HORIZONTAL] + fib_map[max_tile[MOVE_LEFT]]/2;
-
-	if (prev_move == MOVE_DOWN || prev_move == MOVE_RIGHT) {
-		move_score[MOVE_UP] += 1;
-	}
-	if (prev_move == MOVE_LEFT || prev_move == MOVE_UP) {
-		move_score[MOVE_RIGHT] += 1;
-	}
-	if (abs(fib_map[board[0][2]] - fib_map[board[0][1]]) > 2 && abs(fib_map[board[0][2]] - fib_map[board[0][3]]) > 2) {
-		move_score[MOVE_DOWN] += 2;
-	}
-	if (max_loc[1] == 3 && board[0][3] == 0) {
-		move_score[MOVE_UP] += 5;
-	}
-	if (max_loc[0] == 0 && board[0][3] == 0) {
-		move_score[MOVE_RIGHT] += 5;
-	}
-
-
-	move_score[MOVE_UP] += 1;
-	move_score[MOVE_RIGHT] += 1;
-
-	//printf("move_score UP = %d\n", move_score[MOVE_UP]);
-	//printf("move_score RIGHT = %d\n", move_score[MOVE_RIGHT]);
-	//printf("move_score DOWN = %d\n", move_score[MOVE_DOWN]);
-	//printf("move_score LEFT = %d\n", move_score[MOVE_LEFT]);
-
-	optimal_move = MOVE_UP;
-	max_move_score = move_score[MOVE_UP];
-	for(int i = 1; i < 4; i++) {
-		if (max_move_score < move_score[i]) {
-			optimal_move = i;
-			max_move_score = move_score[i];
-		}
-	}
-
-	if (!boardChanged) {
-		//printf("Not changed\n");
-		optimal_move = (prev_move + 1) % 4;
-	}
-
-	prev_move = optimal_move;
-/*
-	printf("decided move: ");
-	switch(optimal_move) {
-		case MOVE_UP:
-			printf("UP\n");
-			break;
-		case MOVE_RIGHT:
-			printf("RIGHT\n");
-			break;
-		case MOVE_DOWN:
-			printf("DOWN\n");
-			break;
-		case MOVE_LEFT:
-			printf("LEFT\n");
-			break;
-		default:
-			break;
-	}
-	printf("-------------------------\n");
-*/
-	move = static_cast<MoveDirection>(optimal_move);	
-	return move;
-/*
-	// Find max number and it's location
-	for(int i = 0; i < 4; i++) {
-		for(int j = 0; j < 4; j++) {
-			if (board[i][j] > max_num) {
-				max_num = board[i][j];
-				max_loc[0] = i;
-				max_loc[1] = j;
-			}
-		}
-	}
-*/
-/*
-	MoveDirection randomMove = static_cast<MoveDirection>(rand() % 4);
-	return randomMove;
-*/
+	return heuristic.generateMove(board);
+	//MoveDirection randomMove = static_cast<MoveDirection>(rand() % 4);
+	//return randomMove;
 }
 
 void Fib2584Ai::gameOver(int board[4][4], int iScore)
@@ -150,9 +27,133 @@ void Fib2584Ai::gameOver(int board[4][4], int iScore)
 You can implement any additional functions
 you may need.
 **********************************/
-int Fib2584Ai::numberOfVerticalMergables(int board[4][4], int &max_tile_up, int &max_tile_down)
+Fib2584Ai::Heuristic::Heuristic()
+{}
+
+void Fib2584Ai::Heuristic::initialize()
+{
+	createFibMap();
+}
+
+MoveDirection Fib2584Ai::Heuristic::generateMove(int board[4][4])
+{
+	int max_tile;
+	int max_tile_pos[2];
+
+	int num_mergables[2];
+	int max_tile_gen[4];
+
+	int move_score[4];
+	int max_move_score;
+	int optimal_move;
+	MoveDirection move;
+
+	bool boardHasChanged = boardcmp(board_prev, board);
+
+	// Find optimal move
+	if (!boardHasChanged) {
+		optimal_move = (prev_move + 1) % 4;
+	}
+	else {
+		// Get number of mergable tiles vertical/horizontal and the max value of generated tile
+		num_mergables[VERTICAL] = numberOfVerticalMergables(board, max_tile_gen[MOVE_UP], max_tile_gen[MOVE_DOWN]);
+		num_mergables[HORIZONTAL] = numberOfHorizontalMergables(board, max_tile_gen[MOVE_LEFT], max_tile_gen[MOVE_RIGHT]);
+
+		// Find the value of max tile and it's location
+		max_tile = valueOfMaxTile(board, max_tile_pos);
+
+		// Evaluate scores of each direction
+		move_score[MOVE_UP] = num_mergables[VERTICAL] + fib_map[max_tile_gen[MOVE_UP]]/2;
+		move_score[MOVE_RIGHT] = num_mergables[HORIZONTAL] + fib_map[max_tile_gen[MOVE_RIGHT]]/2;
+		move_score[MOVE_DOWN] = num_mergables[VERTICAL] + fib_map[max_tile_gen[MOVE_DOWN]]/2;
+		move_score[MOVE_LEFT] = num_mergables[HORIZONTAL] + fib_map[max_tile_gen[MOVE_LEFT]]/2;
+
+		// Top-right corner first
+		move_score[MOVE_UP] += 1;
+		move_score[MOVE_RIGHT] += 1;
+
+		// Adjust the priority according to situation
+		if (prev_move == MOVE_DOWN || prev_move == MOVE_RIGHT) {
+			move_score[MOVE_UP] += 1;
+		}
+		if (prev_move == MOVE_LEFT || prev_move == MOVE_UP) {
+			move_score[MOVE_RIGHT] += 1;
+		}
+		if (abs(fib_map[board[0][2]] - fib_map[board[0][1]]) > 2 &&
+			abs(fib_map[board[0][2]] - fib_map[board[0][3]]) > 2) {
+			move_score[MOVE_DOWN] += 2;
+		}
+		if (max_tile_pos[1] == 3 && board[0][3] == 0) {
+			move_score[MOVE_UP] += 5;
+		}
+		if (max_tile_pos[0] == 0 && board[0][3] == 0) {
+			move_score[MOVE_RIGHT] += 5;
+		}
+
+		optimal_move = MOVE_UP;
+		max_move_score = move_score[MOVE_UP];
+		for(int i = 1; i < 4; i++) {
+			if (max_move_score < move_score[i]) {
+				max_move_score = move_score[i];
+				optimal_move = i;
+			}
+		}
+	}
+	prev_move = optimal_move;
+	move = static_cast<MoveDirection>(optimal_move);
+
+	if (boardHasChanged) {
+		//displayInfo(board, move_score, move);
+	}
+
+	return move;
+}
+
+void Fib2584Ai::Heuristic::createFibMap()
+{
+	fib_map[0] = 0;
+	fib_map[1] = 1;
+	fib_map[2] = 2;
+	fib_map[3] = 3;
+	fib_map[5] = 4;
+	fib_map[8] = 5;
+	fib_map[13] = 6;
+	fib_map[21] = 7;
+	fib_map[34] = 8;
+	fib_map[55] = 9;
+	fib_map[89] = 10;
+	fib_map[144] = 11;
+	fib_map[233] = 12;
+	fib_map[377] = 13;
+	fib_map[610] = 14;
+	fib_map[987] = 15;
+	fib_map[1597] = 16;
+	fib_map[2584] = 17;
+	fib_map[4181] = 18;
+	fib_map[6765] = 19;
+	fib_map[10946] = 20;
+	fib_map[17711] = 21;
+	fib_map[28657] = 22;
+	fib_map[46368] = 23;
+	fib_map[75025] = 24;
+	fib_map[121393] = 25;
+	fib_map[196418] = 26;
+	fib_map[317811] = 27;
+	fib_map[514229] = 28;
+	fib_map[832040] = 29;
+	fib_map[1346269] = 30;
+	fib_map[2178309] = 31;
+}
+
+int Fib2584Ai::Heuristic::numberOfVerticalMergables(
+	int board[4][4],
+	int &max_tile_gen_up,
+	int &max_tile_gen_down)
 {
 	int num_mergables_vertical = 0;
+
+	max_tile_gen_up = 0;
+	max_tile_gen_down = 0;
 
 	// For each columns
 	for(int j = 0; j < 4; j++) {
@@ -169,12 +170,12 @@ int Fib2584Ai::numberOfVerticalMergables(int board[4][4], int &max_tile_up, int 
 					}
 					else {
 						if (abs(fib_map[board[i][j]] - fib_map[board[k][j]]) == 1 ||
-							(board[i][j] == 1 && board[k][j] == 1))
+							(board[i][j] == 1 && board[k][j] == 1))	// Mergable
 						{
-							if (max_tile_up < board[i][j] + board[k][j]) {
-								max_tile_up = board[i][j] + board[k][j];
-							}
 							num_mergables_vertical++;
+							if (max_tile_gen_up < board[i][j] + board[k][j]) {
+								max_tile_gen_up = board[i][j] + board[k][j];
+							}
 							i = k+1;
 							break;
 						}
@@ -203,8 +204,8 @@ int Fib2584Ai::numberOfVerticalMergables(int board[4][4], int &max_tile_up, int 
 						if (abs(fib_map[board[i][j]] - fib_map[board[k][j]]) == 1 ||
 							(board[i][j] == 1 && board[k][j] == 1))
 						{
-							if (max_tile_down < board[i][j] + board[k][j]) {
-								max_tile_down = board[i][j] + board[k][j];
+							if (max_tile_gen_down < board[i][j] + board[k][j]) {
+								max_tile_gen_down = board[i][j] + board[k][j];
 							}
 							i = k-1;
 							break;
@@ -224,9 +225,15 @@ int Fib2584Ai::numberOfVerticalMergables(int board[4][4], int &max_tile_up, int 
 	return num_mergables_vertical;
 }
 
-int Fib2584Ai::numberOfHorizontalMergables(int board[4][4], int &max_tile_left, int &max_tile_right)
+int Fib2584Ai::Heuristic::numberOfHorizontalMergables(
+	int board[4][4],
+	int &max_tile_left,
+	int &max_tile_right)
 {
 	int num_mergables_horizontal = 0;
+
+	max_tile_left = 0;
+	max_tile_right = 0;
 
 	// For each row
 	for(int i = 0; i < 4; i++) {
@@ -243,12 +250,12 @@ int Fib2584Ai::numberOfHorizontalMergables(int board[4][4], int &max_tile_left, 
 					}
 					else {
 						if (abs(fib_map[board[i][j]] - fib_map[board[i][k]]) == 1 ||
-							(board[i][j] == 1 && board[i][k] == 1))
+							(board[i][j] == 1 && board[i][k] == 1))	// Mergable
 						{
+							num_mergables_horizontal++;
 							if (max_tile_left < board[i][j] + board[i][k]) {
 								max_tile_left = board[i][j] + board[i][k];
 							}
-							num_mergables_horizontal++;
 							j = k+1;
 							break;
 						}
@@ -298,64 +305,29 @@ int Fib2584Ai::numberOfHorizontalMergables(int board[4][4], int &max_tile_left, 
 	return num_mergables_horizontal;
 }
 
-void Fib2584Ai::getLocalDensity(int board[4][4], int local_density[4])
+int Fib2584Ai::Heuristic::valueOfMaxTile(int board[4][4], int max_tile_pos[2])
 {
-	for(int i = 0; i < 4; i++) {
-		local_density[i] = 0;
-	}
+	int max_tile = 0;
 
 	for(int i = 0; i < 4; i++) {
 		for(int j = 0; j < 4; j++) {
-			if (i < 2 && j < 2) {
-				local_density[TOP_LEFT] += board[i][j];
-			}
-			else if (i < 2 && j >= 2) {
-				local_density[TOP_RIGHT] += board[i][j];
-			}
-			else if (i >= 2 && j < 2) {
-				local_density[BOTTOM_LEFT] += board[i][j];
-			}
-			else {
-				local_density[BOTTOM_RIGHT] += board[i][j];
+			if (board[i][j] > max_tile) {
+				max_tile = board[i][j];
+				max_tile_pos[0] = i;
+				max_tile_pos[1] = j;
 			}
 		}
 	}
+
+	return max_tile;
 }
 
-void generateFibMap(std::map<int, int> &fib_map)
+void displayInfo(int board[4][4], int move_score[4], MoveDirection move)
 {
-	fib_map[0] = 0;
-	fib_map[1] = 1;
-	fib_map[2] = 2;
-	fib_map[3] = 3;
-	fib_map[5] = 4;
-	fib_map[8] = 5;
-	fib_map[13] = 6;
-	fib_map[21] = 7;
-	fib_map[34] = 8;
-	fib_map[55] = 9;
-	fib_map[89] = 10;
-	fib_map[144] = 11;
-	fib_map[233] = 12;
-	fib_map[377] = 13;
-	fib_map[610] = 14;
-	fib_map[987] = 15;
-	fib_map[1597] = 16;
-	fib_map[2584] = 17;
-	fib_map[4181] = 18;
-	fib_map[6765] = 19;
-	fib_map[10946] = 20;
-	fib_map[17711] = 21;
-	fib_map[28657] = 22;
-	fib_map[46368] = 23;
-	fib_map[75025] = 24;
-	fib_map[121393] = 25;
-	fib_map[196418] = 26;
-	fib_map[317811] = 27;
-	fib_map[514229] = 28;
-	fib_map[832040] = 29;
-	fib_map[1346269] = 30;
-	fib_map[2178309] = 31;
+	displayBoard(board);
+	displayScore(move_score);
+	displayMove(move);
+	printf("-------------------------\n");
 }
 
 void displayBoard(int board[4][4])
@@ -368,16 +340,46 @@ void displayBoard(int board[4][4])
 	}
 }
 
+void displayScore(int move_score[4])
+{
+	printf("move_score UP = %d\n", move_score[MOVE_UP]);
+	printf("move_score RIGHT = %d\n", move_score[MOVE_RIGHT]);
+	printf("move_score DOWN = %d\n", move_score[MOVE_DOWN]);
+	printf("move_score LEFT = %d\n", move_score[MOVE_LEFT]);
+}
+
+void displayMove(MoveDirection move)
+{
+	printf("decided move: ");
+	switch (move) {
+		case MOVE_UP:
+			printf("UP\n");
+			break;
+		case MOVE_RIGHT:
+			printf("RIGHT\n");
+			break;
+		case MOVE_DOWN:
+			printf("DOWN\n");
+			break;
+		case MOVE_LEFT:
+			printf("LEFT\n");
+			break;
+		default:
+			break;
+	}
+}
+
 bool boardcmp(int a[4][4], int b[4][4])
 {
-	bool changed = 0;
+	bool notEqual = 0;
 	for(int i = 0; i < 4; i++) {
 		for(int j = 0; j < 4; j++) {
 			if (a[i][j] != b[i][j]) {
 				a[i][j] = b[i][j];
-				changed = 1;
+				notEqual = 1;
 			}
 		}
 	}
-	return changed;
+
+	return notEqual;
 }
